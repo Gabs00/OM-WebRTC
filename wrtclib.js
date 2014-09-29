@@ -1,8 +1,7 @@
 var config = require('./configs');
 var Logger = require('./Logger');
 var WebRTC = require('webrtc');
-var transport = config.transport();
-var signaller = clientHandlers(config.signallerConfig, transport);
+
 
 function createVid(stream, local){
   var toDom;
@@ -20,9 +19,21 @@ function createVid(stream, local){
   attachMediaStream(elem, stream);
 }
 
-module.exports = Rtclib(signaller, config);
-module.exports.signaller = signaller;
-module.exports.transport = transport;
+module.exports = function(configObj){
+  configObj = configObj || {};
+
+  for(var p in configObj){
+    config[p] = configObj[p];
+  }
+  
+  var transport = config.transport();
+  var signaller = clientHandlers(config.signallerConfig, transport);
+  var WebRTC = Rtclib(signaller, config);
+  WebRTC.signaller = signaller;
+  WebRTC.transport = transport;
+  return WebRTC;
+};
+
 
 //How the client communicates
 //Default will be via socket.io

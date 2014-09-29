@@ -12,9 +12,9 @@ function joinRoom(room, client){
   }
 }
 var room = path;
-
-WebRTC.start(null, function(err, stream){
-  joinRoom(room, WebRTC.signaller);
+var webrtc = WebRTC({});
+webrtc.start(null, function(err, stream){
+  joinRoom(room, webrtc.signaller);
 });
 
 module.exports = WebRTC;
