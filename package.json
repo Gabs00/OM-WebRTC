@@ -1,5 +1,5 @@
 {
-  "name": "OM-WebRTC",
+  "name": "om-webrtc",
   "version": "0.0.1",
   "description": "WebRTC client to be used with Our-Meeting and potentially other projects",
   "main": "index.js",
