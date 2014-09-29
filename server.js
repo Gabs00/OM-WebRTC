@@ -24,7 +24,7 @@ io.on('connect', function(socket){
   });
   socket.on('disconnect', function(){
   	console.log('user disco', socket.id);
-  	socket.broadcast.to(socket.myroom).emit('left', {id:socket.id});
+  	socket.broadcast.to(socket.myroom).emit('peer-disconnect', {id:socket.id});
   });
 });
 

@@ -168,5 +168,9 @@ function Rtclib(client, config){
     peer.handleMessage(message);
   });
 
+  client.receive('peer-disconnect', function(data){
+    var id = data.id;
+    wrtc.removePeers(id);
+  });
   return wrtc;
 }
