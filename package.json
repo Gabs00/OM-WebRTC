@@ -1,0 +1,33 @@
+{
+  "name": "OM-WebRTC",
+  "version": "0.0.1",
+  "description": "WebRTC client to be used with Our-Meeting and potentially other projects",
+  "main": "index.js",
+  "dependencies": {
+    "webrtc": "^1.11.4"
+  },
+  "devDependencies": {
+    "browserify": "^5.12.1",
+    "express": "^4.9.5",
+    "socket.io": "^1.1.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "build": "node build.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Gabs00/OM-WebRTC.git"
+  },
+  "keywords": [
+    "webrtc",
+    "rtcpeerconnect"
+  ],
+  "author": "Gabar",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Gabs00/OM-WebRTC/issues"
+  },
+  "homepage": "https://github.com/Gabs00/OM-WebRTC"
+}
