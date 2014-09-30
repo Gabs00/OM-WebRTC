@@ -1,1 +1,1 @@
-module.exports = require('./wrtclib');
+module.exports = require('./wrtc');
