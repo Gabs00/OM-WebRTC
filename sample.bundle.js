@@ -1,5 +1,43 @@
-!function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.omRTC=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-module.exports = require('./wrtclib');
+!function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.WebRTC=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+var WebRTC = require('./wrtclib');
+
+ //Should have properties onLocalStream, onRemoveLocalStream, onRemoteStream, onRemoveRemoteStream
+  var client = io('/');
+
+  var webrtc = WebRTC({});
+
+  client.on('new-peer', function(data){
+    var id = data.id;
+    var peer = webrtc.onNewPeer(id, webrtc);
+    peer.start();
+  });
+  
+  client.on('signal', function(data){
+    webrtc.handlers.sig(data);
+  });
+
+  webrtc.on('message', function(message){
+    client.emit('signal', message);
+  });
+
+  client.on('peer-disconnect', function(data){
+    var id = data.id;
+    webrtc.removePeers(id);
+  });
+
+  function create(stream){
+    var elem = document.createElement('video');
+    elem.autoplay = true;
+    document.body.appendChild(elem);
+    attachMediaStream(elem, stream);
+  }
+  webrtc.on('localStream', create);
+  webrtc.on('peerStreamAdded', create);
+  webrtc.start(null, function(err, stream){
+    client.emit('join', {room:1234});
+  });
+
+module.exports = webrtc;
 },{"./wrtclib":26}],2:[function(require,module,exports){
 /*
   All Events
@@ -4887,8 +4925,8 @@ function Rtclib(config, logger){
 
   // //What to do when a new remote stream is added
   // wrtc.on('peerStreamAdded', onStream.onRemoteStream);
-  onNewPeer = config.NewPeer || createPeer;
-  onFindOrCreatePeer = config.findOrCreate || findOrCreatePeer;
+  wrtc.onNewPeer = config.NewPeer || createPeer;
+  wrtc.onFindOrCreatePeer = config.findOrCreate || findOrCreatePeer;
 
   /*
     Peer Message Scheme
@@ -4902,7 +4940,7 @@ function Rtclib(config, logger){
   function signal(data){
     var message = data.message;
     var id = data.id;
-    var peer = onFindOrCreatePeer(id, wrtc);
+    var peer = wrtc.onFindOrCreatePeer(id, wrtc);
     //does the filtering of whether it is an offer/answer or ice candidate
     peer.handleMessage(message);
   }

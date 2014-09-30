@@ -1,20 +1,39 @@
 var WebRTC = require('./wrtclib');
-var path = window.location.hash;
 
-if(!path.match(/^\#[a-z0-9]+$/i) && path !== ''){
-  console.log(path);
-  path = '';
-}
+ //Should have properties onLocalStream, onRemoveLocalStream, onRemoteStream, onRemoveRemoteStream
 
-function joinRoom(room, client){
-  if(room.length > 1){
-    client.send('join', {room:room});
+  var webrtc = WebRTC({});
+
+  client.on('new-peer', function(data){
+    var id = data.id;
+    var peer = webrtc.onNewPeer(id, webrtc);
+    peer.start();
+  });
+  
+  client.on('signal', function(data){
+    webrtc.handlers.sig(data);
+  });
+
+  client.on('peer-disconnect', function(data){
+    var id = data.id;
+    webrtc.removePeers(id);
+  });
+
+  webrtc.on('message', function(message){
+    client.emit('signal', message);
+  });
+
+
+  function create(stream){
+    var elem = document.createElement('video');
+    elem.autoplay = true;
+    document.body.appendChild(elem);
+    attachMediaStream(elem, stream);
   }
-}
-var room = path;
-var webrtc = WebRTC({});
-webrtc.start(null, function(err, stream){
-  joinRoom(room, webrtc.signaller);
-});
+  webrtc.on('localStream', create);
+  webrtc.on('peerStreamAdded', create);
+  webrtc.start(null, function(err, stream){
+    client.emit('join', {room:1234});
+  });
 
-module.exports = WebRTC;
+module.exports = webrtc;

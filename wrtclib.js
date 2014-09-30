@@ -1,47 +1,15 @@
-var config = require('./configs');
 var Logger = require('./Logger');
 var WebRTC = require('webrtc');
 
 
-function createVid(stream, local){
-  var toDom;
-  var elem = document.createElement('video');
-  if(local){
-    var div = document.createElement('div');
-    div.appendChild(elem);
-    toDom = div;
-  } else {
-    toDom = elem;
-  }
-  elem.autoplay = true;
-
-  document.body.appendChild(toDom);  
-  attachMediaStream(elem, stream);
-}
 
 module.exports = function(configObj){
-  configObj = configObj || {};
-
-  for(var p in configObj){
-    config[p] = configObj[p];
-  }
-  
-  var transport = config.transport();
-  var signaller = clientHandlers(config.signallerConfig, transport);
-  var WebRTC = Rtclib(signaller, config);
-  WebRTC.signaller = signaller;
-  WebRTC.transport = transport;
+  var logger = new Logger(['volumeChange', 'speaking', 'stopSpeaking', 'channelMessage']);
+  var WebRTC = Rtclib(configObj, logger);
   return WebRTC;
 };
 
-
-//How the client communicates
-//Default will be via socket.io
-function clientHandlers(options, client){
-  options = options(client);
-  return options;
-}
-function Rtclib(client, config){
+function Rtclib(config, logger){
 
   /*
     peer options
@@ -72,6 +40,7 @@ function Rtclib(client, config){
   function createPeer(id, wrtc){
     var config = peerConfig(id, wrtc);
     var peer = wrtc.createPeer(config);
+    wrtc.emit('addUser', peer);
     return peer;  
   }
   function findOrCreatePeer(id, wrtc){
@@ -84,7 +53,7 @@ function Rtclib(client, config){
     return peer;
   }
   //Logger is used for logging events to the console, takes a list of events to ignore
-  var logger = new Logger(['volumeChange', 'speaking', 'stopSpeaking', 'channelMessage']);
+
 
   //changeState places a filter on what type of events to see
   //logger.changeState('pc');
@@ -110,10 +79,12 @@ function Rtclib(client, config){
     }
     return ops;
   })(config.webrtcConfig);
+
   //create rtc manager
   var wrtc = new WebRTC(wrtcConfig);
 
   /*
+    on localMedia.start() parameter
     These are not required as the WebRTC library sets them
     Required fields when setting contraints
     audio: true false defaults to false
@@ -123,43 +94,11 @@ function Rtclib(client, config){
       video:true
     };
   */
-//=======================     MOVE THIS OUT
-  //WebRTC inherits from localMedia
-  //Start requests local media streams
-//=======================================
 
-  var onStream = (function(config){
-    var ops = {
-      onLocalStream: function(stream){
-        createVid(stream, true);
-      }, 
-      onRemoveLocalStream: function(){}, 
-      onRemoteStream: function(peer){
-        createVid(peer.stream);
-      }, 
-      onRemoveRemoteStream: function(){}
-    };
-    for(var p in config){
-      ops[p] = config[p];
-    }
-    return ops;
-  })(config.streamConfig); 
-  //What to do when local stream is added
-  wrtc.on('localStream', onStream.onLocalStream);
-
-  //offer / answer / ice signalling
-  wrtc.on('message', function(message){
-    client.send('signal', message);
-  });
-
-  //What to do when a new remote stream is added
-  wrtc.on('peerStreamAdded', onStream.onRemoteStream);
-
-  client.receive('new-peer', function(data){
-    var id = data.id;
-    var peer = createPeer(id, wrtc);
-    peer.start();
-  });
+  // //What to do when a new remote stream is added
+  // wrtc.on('peerStreamAdded', onStream.onRemoteStream);
+  wrtc.onNewPeer = config.NewPeer || createPeer;
+  wrtc.onFindOrCreatePeer = config.findOrCreate || findOrCreatePeer;
 
   /*
     Peer Message Scheme
@@ -170,18 +109,34 @@ function Rtclib(client, config){
           payload: payload, 'metadata'
           prefix: webrtc.prefix browser prefix
   */
-
-  client.receive('signal', function(data){
+  function signal(data){
     var message = data.message;
     var id = data.id;
-    var peer = findOrCreatePeer(id, wrtc);
+    var peer = wrtc.onFindOrCreatePeer(id, wrtc);
     //does the filtering of whether it is an offer/answer or ice candidate
     peer.handleMessage(message);
-  });
+  }
 
-  client.receive('peer-disconnect', function(data){
-    var id = data.id;
-    wrtc.removePeers(id);
-  });
+  var signallingEvents = {
+    sig: signal,
+    onOffer: signal,
+    onAnswer: signal,
+    onIce: signal
+  };
+
+  wrtc.handlers = {};
+
+  (function(){
+    var ops = config.signalHandlers || {};
+    for(var p in ops){
+      signallingEvents[p] = ops[p];
+    }
+
+    for(var evt in signallingEvents){
+      wrtc.handlers[evt] = signallingEvents[evt];
+    }
+  })();
+
+
   return wrtc;
 }
