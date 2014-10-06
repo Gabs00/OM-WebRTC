@@ -9,6 +9,7 @@ var wild = require('wildemitter');
       Peer streams
       WebRTC configuration
       local streams
+      provide methods mute and unmute local stream RTCpeerConnection / M4ediaStream API ourmeeting website repo 
 
     Provide events for when - (using wild emitter)
       new connection process has started
@@ -27,8 +28,24 @@ var wild = require('wildemitter');
 function WebRTC(configObj){
   var webrtc = {};
   var me = { stream: null, id:null };
+  
+  //WebRTC Session Manager - Peer Connection Initializer
   var peerManager = wrtclib(configObj);
-
+/*
+  webrtc.onPeerAdded = function(callback){
+    if(typeof callback === 'function'){
+      webrtc.onpeeradded = callback;
+    }
+  };
+  
+  //Lowercase is private method
+  //webrtc.on('PeerAdded', callback)
+  webrtc.onpeeradded = function(peer){
+    webrtc.emit('PeerAdded', peer);
+  }
+  
+  peerManager.on('addUser', webrtc.onpeeradded);
+*/
   util.inherits(webrtc, wildemitter);
 
   webrtc.setRTC = function(peerObj){
