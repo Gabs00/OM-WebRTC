@@ -1,44 +1,73 @@
 !function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.WebRTC=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var WebRTC = require('./wrtclib');
+var WebRTC = require('./wrtc');
+var client = io.connect('localhost');
+var jq = function $(selector){
+  return document.querySelectorAll(selector);
+};
 
  //Should have properties onLocalStream, onRemoveLocalStream, onRemoteStream, onRemoveRemoteStream
-  var client = io('/');
 
-  var webrtc = WebRTC({});
-
-  client.on('new-peer', function(data){
-    var id = data.id;
-    var peer = webrtc.onNewPeer(id, webrtc);
-    peer.start();
+  var webrtc = WebRTC({
+    webrtcConfig: {
+      debug:false
+    }
   });
+  var rtc = webrtc.RTC();
+  webrtc.jq = jq;
+  client.on('new-peer', webrtc.newPeer.bind(rtc));
   
   client.on('signal', function(data){
-    webrtc.handlers.sig(data);
+    rtc.handlers.sig(data);
   });
+
+  client.on('peer-disconnect', function(data){
+    var id = data.id;
+    webrtc.removePeer(id);
+  });
+
 
   webrtc.on('message', function(message){
     client.emit('signal', message);
   });
 
-  client.on('peer-disconnect', function(data){
-    var id = data.id;
-    webrtc.removePeers(id);
-  });
-
+  var myInfo = webrtc.getMyInfo();
   function create(stream){
     var elem = document.createElement('video');
     elem.autoplay = true;
     document.body.appendChild(elem);
     attachMediaStream(elem, stream);
+    return elem;
   }
-  webrtc.on('localStream', create);
-  webrtc.on('peerStreamAdded', create);
-  webrtc.start(null, function(err, stream){
+  webrtc.on('LocalStreamAdded', function(stream){
+    var elem = create(stream);
+    elem.id = "local";
+    myInfo.elem = elem;
+  });
+
+  webrtc.on('LocalStreamStopped', function(){
+    myInfo.elem.hidden = true;
+  });
+  
+  webrtc.on('PeerStreamAdded', function(peer){
+    var id = peer.id;
+    peer.elem = create(peer.stream);
+    peer.elem.id = id;
+  });
+
+  webrtc.on('PeerStreamRemoved', function(peer){
+    if(peer.elem){
+      peer.elem.remove();
+    }
+  });
+  webrtc.on('PeerDataMessage', function(){
+    console.log(arguments);
+  });
+  webrtc.start(function(err, stream){
     client.emit('join', {room:1234});
   });
 
 module.exports = webrtc;
-},{"./wrtclib":26}],2:[function(require,module,exports){
+},{"./wrtc":27}],2:[function(require,module,exports){
 /*
   All Events
 */
@@ -2368,7 +2397,7 @@ module.exports = TraceablePeerConnection;
 
 },{"util":6,"webrtcsupport":19,"wildemitter":23}],19:[function(require,module,exports){
 module.exports=require(12)
-},{"C:\\Users\\gewen_000\\Documents\\Github\\OM-WebRTC\\node_modules\\webrtc\\node_modules\\localmedia\\node_modules\\mediastream-gain\\node_modules\\webrtcsupport\\index-browser.js":12}],20:[function(require,module,exports){
+},{"C:\\Users\\gewen_000\\Documents\\GitHub\\OM-WebRTC\\node_modules\\webrtc\\node_modules\\localmedia\\node_modules\\mediastream-gain\\node_modules\\webrtcsupport\\index-browser.js":12}],20:[function(require,module,exports){
 //     Underscore.js 1.7.0
 //     http://underscorejs.org
 //     (c) 2009-2014 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -4810,6 +4839,236 @@ WebRTC.prototype.sendDirectlyToAll = function (channel, message, payload) {
 module.exports = WebRTC;
 
 },{"./peer":24,"localmedia":7,"mockconsole":13,"util":6,"webrtcsupport":22,"wildemitter":23}],26:[function(require,module,exports){
+module.exports=require(23)
+},{"C:\\Users\\gewen_000\\Documents\\GitHub\\OM-WebRTC\\node_modules\\webrtc\\node_modules\\wildemitter\\wildemitter.js":23}],27:[function(require,module,exports){
+var wrtclib = require('./wrtclib');
+var util = require('util');
+var wild = require('wildemitter');
+
+/*
+  The obect created below is for managing the webrtc data portion
+  Needs to: 
+    Provide Access to - 
+      Peer streams
+      WebRTC configuration
+      local streams
+      provide methods mute and unmute local stream RTCpeerConnection / M4ediaStream API ourmeeting website repo 
+
+    Provide events for when - (using wild emitter)
+      new connection process has started
+      a new connection has been established
+      new streams are added
+      streams are muted / unmuted
+      streams end
+
+      --Note on events, review the webrtc.js module in the node_modules
+        folder for events emitted. wrtclib extends the webrtc.js module
+
+    Provide the ability to listen on this object for changes
+
+*/
+//User a function to make this easily adaptable to angular
+function WebRTC(configObj){
+  var Wrtc = function(){
+    wild.call(this);
+  };
+  util.inherits(Wrtc, wild);
+  
+  var webrtc = new Wrtc();
+
+  var me = { stream: null, id:null };
+  var userids = [];
+  //webrtc.prototype = {};
+  //WebRTC Session Manager - Peer Connection Initializer
+  var peerManager = wrtclib(configObj);
+
+
+  webrtc.setRTC = function(peerObj){
+    peerManager = peerObj;
+  };
+  /*
+    Meeting Specific events 
+      LocalStreamAdded
+      LocalStreamStopped
+      LocalAudioMuted
+      LocalAudioUnmuted
+      LocalVideoPaused
+      LocalVideoResumed
+
+      PeerAdded
+      PeerRemoved
+      PeerStreamAdded
+      PeerStreamRemoved
+      PeerStreamEnabled
+      PeerStreamDisabled
+      PeerDataAdded
+      PeerDataMessage
+  */
+  //Event mapping
+  var evt = {
+    'localStream':'LocalStreamAdded',
+    'localStreamStopped':'LocalStreamStopped',
+    'audioOff':'LocalAudioMuted',
+    'audioOn':'LocalAudioUnmuted',    
+    'videoOff':'LocalVideoPaused',
+    'videoOn':'LocalVideoResumed',    
+    'addUser':'PeerAdded',
+    'removeUser':'PeerRemoved',
+    'peerStreamAdded':'PeerStreamAdded',
+    'peerStreamRemoved':'PeerStreamRemoved',
+    'unmute':'PeerStreamEnabled',
+    'mute':'PeerStreamDisabled',
+    'message': 'message',
+    'channelMessage': 'PeerDataMessage',
+    'channelOpen': 'PeerDataAdded'
+  };
+
+  function elevateEvents(event){
+    var args = Array.prototype.slice.call(arguments, 1);
+    var normalize = evt[event];
+    if(normalize){
+      args.unshift(evt[event]);
+      console.log("EVENT ARGUMENTS:",event, args);
+      webrtc.emit.apply(webrtc,args);
+    }
+  }
+
+  //Renames events in evt and forwards them
+  peerManager.on('*', elevateEvents);
+
+  peerManager.on('addUser', function(peer){
+    userids.push(peer.id);
+    peer.on('*', elevateEvents);
+  });
+
+  //Gets the localMediaStream and then emits it once it is available
+  //Generally you don't want to start receiving peer connections until after
+  //calling this function. Args are not required is not required. callback is the 
+  //last thing executed.
+  webrtc.start = function(callback, contraints){
+    contraints = contraints || null;
+    peerManager.start(contraints, function(err, stream){
+      if(typeof callback === 'function'){
+        callback(err, stream);
+      }
+    });
+  };
+
+  webrtc.on('PeerNew', function(data){
+    var id = data.id;
+    var peer = peerManager.onNewPeer(id, peerManager);
+    peer.start();
+  });
+
+  webrtc.newPeer = function(peer){
+    webrtc.emit('PeerNew', peer);
+  };
+
+  webrtc.removePeer = function(id){
+    peerManager.removePeers(id);
+    webrtc.emit('PeerRemoved', id);
+    var index = userids.indexOf(id);
+    if(index !== -1) userids.splice(index, 1);
+  };
+
+  //Returns a list of peer objects
+  webrtc.getPeers = function(){
+    return peerManager.getPeers();
+  };
+
+  webrtc.addLocalStream = function(stream){
+    me.stream = stream;
+  };
+
+  webrtc.getAllUsers = function(){
+    var peers = webrtc.getPeers();
+    peers.forEach(function(pc){
+      if(userids.indexOf(pc.id) === -1){
+        userids.push(pc.id);
+      }
+    });
+    return userids;
+  };
+
+  webrtc.getUser = function(user){
+    var users = peerManager.getPeers(user);
+    if(users){
+      return users[0];
+    }
+  };
+  //Stream has all associated streams, video/audio/datachannel
+  webrtc.getStream = function(user){
+    var peer = webrtc.getUser(user);
+    if(peer !== undefined){
+      return peer.stream;
+    }
+  };
+
+  webrtc.getVideoStream = function(user){
+    var stream = webrtc.getStream(user);
+    if(stream !== undefined) {
+      return stream.getVideoTracks();
+    }
+  };
+
+  webrtc.getAudioStream = function(user){
+    var stream = webrtc.getStream(user);
+    if(stream !== undefined) {
+      return stream.getAudioTracks();
+    }
+  };
+
+  webrtc.setId = function(id){
+    me.id = id;
+  };
+
+  //Returns own stream and id 
+  webrtc.getMyInfo = function(){
+    return me;
+  };
+
+  webrtc.RTC = function(){
+    return peerManager;
+  };
+
+  /*
+    Local Stream Controls
+  */
+
+  webrtc.streamController = {
+    mute: peerManager.mute.bind(peerManager),
+    unmute: peerManager.unmute.bind(peerManager),
+    pauseVideo: peerManager.pauseVideo.bind(peerManager),
+    resumeVideo: peerManager.resumeVideo.bind(peerManager),
+    pause: peerManager.pause.bind(peerManager),
+    resume: peerManager.resume.bind(peerManager),
+    kill: peerManager.stop.bind(peerManager, webrtc.getMyInfo().stream)
+  };
+
+  webrtc.createChatChannel = function(opts){
+    webrtc.chat = {};
+    userids.forEach(function(id){
+      var peerChannel = webrtc.getUser(id).getDataChannel('chat', opts);
+      webrtc.chat[id] = peerChannel;
+    });
+    webrtc.emit('ChatChannel', webrtc.chat);
+    return webrtc.chat;
+  };
+
+  webrtc.sendChat = function(message, payload){
+    if(webrtc.chat === undefined){
+      webrtc.createChatChannel();
+    }
+    peerManager.sendDirectlyToAll('chat', message, payload);
+  };
+  webrtc.createScreenShareChannel = function(){
+    console.log('This feature is not yet implimented');
+  };
+  return webrtc;
+}
+module.exports = WebRTC;
+
+},{"./wrtclib":28,"util":6,"wildemitter":26}],28:[function(require,module,exports){
 var Logger = require('./Logger');
 var WebRTC = require('webrtc');
 
@@ -4852,6 +5111,7 @@ function Rtclib(config, logger){
   function createPeer(id, wrtc){
     var config = peerConfig(id, wrtc);
     var peer = wrtc.createPeer(config);
+    wrtc.emit('addUser', peer);
     return peer;  
   }
   function findOrCreatePeer(id, wrtc){
@@ -4863,6 +5123,7 @@ function Rtclib(config, logger){
     }
     return peer;
   }
+
   //Logger is used for logging events to the console, takes a list of events to ignore
 
 
@@ -4888,12 +5149,15 @@ function Rtclib(config, logger){
     for(var p in config){
       ops[p] = config[p];
     }
+    
     return ops;
   })(config.webrtcConfig);
+  logger.debug = wrtcConfig.debug;
   //create rtc manager
   var wrtc = new WebRTC(wrtcConfig);
 
   /*
+    on localMedia.start() parameter
     These are not required as the WebRTC library sets them
     Required fields when setting contraints
     audio: true false defaults to false
@@ -4903,25 +5167,6 @@ function Rtclib(config, logger){
       video:true
     };
   */
-//=======================     MOVE THIS OUT
-  //WebRTC inherits from localMedia
-  //Start requests local media streams
-//=======================================
-
-  var onStream = (function(config){
-    var ops = {};
-    for(var p in config){
-      ops[p] = config[p];
-    }
-    return ops;
-  })(config.streamConfig); 
-  // //What to do when local stream is added
-  // wrtc.on('localStream', onStream.onLocalStream);
-
-  // //offer / answer / ice signalling
-  // wrtc.on('message', function(message){
-  //   client.send('signal', message);
-  // });
 
   // //What to do when a new remote stream is added
   // wrtc.on('peerStreamAdded', onStream.onRemoteStream);
@@ -4944,6 +5189,7 @@ function Rtclib(config, logger){
     //does the filtering of whether it is an offer/answer or ice candidate
     peer.handleMessage(message);
   }
+
   var signallingEvents = {
     sig: signal,
     onOffer: signal,

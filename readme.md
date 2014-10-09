@@ -2,16 +2,16 @@ WebRTC client that utilizes the [webrtc library](https://github.com/HenrikJorete
 
 #### Setup
 
-See `config.js` for configuration options. Has default options that work out of the box when using the provided `server.js`.
+See `sample.js` for example usage.
 
-#### To see an example
+#### To use the example
 
     npm install
     node build-sample.js
     npm start
 
-Then navigate to localhost:9000/#1234
+Then navigate to localhost:9000
 
 #### Signalling
 
-Socket.io is used for signalling, though that can be changed in the `config.js` file
+Socket.io is used for signalling in the examples, some sort of signalling channel that allows webrtc to set up calls between peers is required.

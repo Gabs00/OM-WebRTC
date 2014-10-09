@@ -1,4 +1,4 @@
-var wrtclib = require('wrtclib.js');
+var wrtclib = require('./wrtclib');
 var util = require('util');
 var wild = require('wildemitter');
 
@@ -26,32 +26,109 @@ var wild = require('wildemitter');
 */
 //User a function to make this easily adaptable to angular
 function WebRTC(configObj){
-  var webrtc = {};
-  var me = { stream: null, id:null };
+  var Wrtc = function(){
+    wild.call(this);
+  };
+  util.inherits(Wrtc, wild);
   
+  var webrtc = new Wrtc();
+
+  var me = { stream: null, id:null };
+  var userids = [];
+  //webrtc.prototype = {};
   //WebRTC Session Manager - Peer Connection Initializer
   var peerManager = wrtclib(configObj);
-/*
-  webrtc.onPeerAdded = function(callback){
-    if(typeof callback === 'function'){
-      webrtc.onpeeradded = callback;
-    }
-  };
-  
-  //Lowercase is private method
-  //webrtc.on('PeerAdded', callback)
-  webrtc.onpeeradded = function(peer){
-    webrtc.emit('PeerAdded', peer);
-  }
-  
-  peerManager.on('addUser', webrtc.onpeeradded);
-*/
-  util.inherits(webrtc, wildemitter);
+
 
   webrtc.setRTC = function(peerObj){
     peerManager = peerObj;
   };
+  /*
+    Meeting Specific events 
+      LocalStreamAdded
+      LocalStreamStopped
+      LocalAudioMuted
+      LocalAudioUnmuted
+      LocalVideoPaused
+      LocalVideoResumed
 
+      PeerAdded
+      PeerRemoved
+      PeerStreamAdded
+      PeerStreamRemoved
+      PeerStreamEnabled
+      PeerStreamDisabled
+      PeerDataAdded
+      PeerDataMessage
+  */
+  //Event mapping
+  var evt = {
+    'localStream':'LocalStreamAdded',
+    'localStreamStopped':'LocalStreamStopped',
+    'audioOff':'LocalAudioMuted',
+    'audioOn':'LocalAudioUnmuted',    
+    'videoOff':'LocalVideoPaused',
+    'videoOn':'LocalVideoResumed',    
+    'addUser':'PeerAdded',
+    'removeUser':'PeerRemoved',
+    'peerStreamAdded':'PeerStreamAdded',
+    'peerStreamRemoved':'PeerStreamRemoved',
+    'unmute':'PeerStreamEnabled',
+    'mute':'PeerStreamDisabled',
+    'message': 'message',
+    'channelMessage': 'PeerDataMessage',
+    'channelOpen': 'PeerDataAdded'
+  };
+
+  function elevateEvents(event){
+    var args = Array.prototype.slice.call(arguments, 1);
+    var normalize = evt[event];
+    if(normalize){
+      args.unshift(evt[event]);
+      console.log("EVENT ARGUMENTS:",event, args);
+      webrtc.emit.apply(webrtc,args);
+    }
+  }
+
+  //Renames events in evt and forwards them
+  peerManager.on('*', elevateEvents);
+
+  peerManager.on('addUser', function(peer){
+    userids.push(peer.id);
+    peer.on('*', elevateEvents);
+  });
+
+  //Gets the localMediaStream and then emits it once it is available
+  //Generally you don't want to start receiving peer connections until after
+  //calling this function. Args are not required is not required. callback is the 
+  //last thing executed.
+  webrtc.start = function(callback, contraints){
+    contraints = contraints || null;
+    peerManager.start(contraints, function(err, stream){
+      if(typeof callback === 'function'){
+        callback(err, stream);
+      }
+    });
+  };
+
+  webrtc.on('PeerNew', function(data){
+    var id = data.id;
+    var peer = peerManager.onNewPeer(id, peerManager);
+    peer.start();
+  });
+
+  webrtc.newPeer = function(peer){
+    webrtc.emit('PeerNew', peer);
+  };
+
+  webrtc.removePeer = function(id){
+    peerManager.removePeers(id);
+    webrtc.emit('PeerRemoved', id);
+    var index = userids.indexOf(id);
+    if(index !== -1) userids.splice(index, 1);
+  };
+
+  //Returns a list of peer objects
   webrtc.getPeers = function(){
     return peerManager.getPeers();
   };
@@ -60,40 +137,14 @@ function WebRTC(configObj){
     me.stream = stream;
   };
 
-  //Actions to take when receiving a local stream
-  webrtc.onLocalStream = function(callback){
-    webrtc.onLocalStream = callback;
-  };
-
-  webrtc.onlocalstream = function(stream){
-    webrtc.addLocalStream(stream);
-    webrtc.onLocalStream(stream);
-  };
-
-  //Actions to be taken when receiving a remote stream
-  webrtc.onRemoteStream = function(callback){
-    webrtc.onRemoteStream = callback;
-  };
-
-  webrtc.onremotestream = function(peer){
-    webrtc.onRemoteStream(peer.stream, peer.id, peer);
-  };
-
-  webrtc.onRemoteStreamRemoval = function(callback){
-    webrtc.onRemoteStreamRemoval = callback;
-  };
-
-  webrtc.onremotestreamremoval = function(peer){
-    webrtc.onRemoteStreamRemoval(peer);
-  };
-
   webrtc.getAllUsers = function(){
-    var ids = [];
-    var peerManager = webrtc.getPeers();
-    peerManager.forEach(function(pc){
-      ids.push(pc.id);
+    var peers = webrtc.getPeers();
+    peers.forEach(function(pc){
+      if(userids.indexOf(pc.id) === -1){
+        userids.push(pc.id);
+      }
     });
-    return ids;
+    return userids;
   };
 
   webrtc.getUser = function(user){
@@ -128,12 +179,47 @@ function WebRTC(configObj){
     me.id = id;
   };
 
+  //Returns own stream and id 
   webrtc.getMyInfo = function(){
     return me;
   };
 
   webrtc.RTC = function(){
     return peerManager;
+  };
+
+  /*
+    Local Stream Controls
+  */
+
+  webrtc.streamController = {
+    mute: peerManager.mute.bind(peerManager),
+    unmute: peerManager.unmute.bind(peerManager),
+    pauseVideo: peerManager.pauseVideo.bind(peerManager),
+    resumeVideo: peerManager.resumeVideo.bind(peerManager),
+    pause: peerManager.pause.bind(peerManager),
+    resume: peerManager.resume.bind(peerManager),
+    kill: peerManager.stop.bind(peerManager, webrtc.getMyInfo().stream)
+  };
+
+  webrtc.createChatChannel = function(opts){
+    webrtc.chat = {};
+    userids.forEach(function(id){
+      var peerChannel = webrtc.getUser(id).getDataChannel('chat', opts);
+      webrtc.chat[id] = peerChannel;
+    });
+    webrtc.emit('ChatChannel', webrtc.chat);
+    return webrtc.chat;
+  };
+
+  webrtc.sendChat = function(message, payload){
+    if(webrtc.chat === undefined){
+      webrtc.createChatChannel();
+    }
+    peerManager.sendDirectlyToAll('chat', message, payload);
+  };
+  webrtc.createScreenShareChannel = function(){
+    console.log('This feature is not yet implimented');
   };
   return webrtc;
 }
