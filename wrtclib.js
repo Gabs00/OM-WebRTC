@@ -52,6 +52,7 @@ function Rtclib(config, logger){
     }
     return peer;
   }
+
   //Logger is used for logging events to the console, takes a list of events to ignore
 
 
@@ -77,9 +78,10 @@ function Rtclib(config, logger){
     for(var p in config){
       ops[p] = config[p];
     }
+    
     return ops;
   })(config.webrtcConfig);
-
+  logger.debug = wrtcConfig.debug;
   //create rtc manager
   var wrtc = new WebRTC(wrtcConfig);
 

@@ -1,10 +1,11 @@
 {
   "name": "om-webrtc",
-  "version": "0.0.5",
+  "version": "0.0.7",
   "description": "WebRTC client to be used with Our-Meeting and potentially other projects",
   "main": "index.js",
   "dependencies": {
-    "webrtc": "^1.11.4"
+    "webrtc": "^1.11.4",
+    "wildemitter": "^1.0.1"
   },
   "devDependencies": {
     "browserify": "^5.12.1",
