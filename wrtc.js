@@ -75,7 +75,9 @@ function WebRTC(configObj){
     'peerStreamRemoved':'PeerStreamRemoved',
     'unmute':'PeerStreamEnabled',
     'mute':'PeerStreamDisabled',
-    'message': 'message'
+    'message': 'message',
+    'channelMessage': 'PeerDataMessage',
+    'channelOpen': 'PeerDataAdded'
   };
 
   function elevateEvents(event){

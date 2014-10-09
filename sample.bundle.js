@@ -59,7 +59,9 @@ var jq = function $(selector){
       peer.elem.remove();
     }
   });
-
+  webrtc.on('PeerDataMessage', function(){
+    console.log(arguments);
+  });
   webrtc.start(function(err, stream){
     client.emit('join', {room:1234});
   });
@@ -4916,7 +4918,9 @@ function WebRTC(configObj){
     'peerStreamRemoved':'PeerStreamRemoved',
     'unmute':'PeerStreamEnabled',
     'mute':'PeerStreamDisabled',
-    'message': 'message'
+    'message': 'message',
+    'channelMessage': 'PeerDataMessage',
+    'channelOpen': 'PeerDataAdded'
   };
 
   function elevateEvents(event){

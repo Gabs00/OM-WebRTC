@@ -58,7 +58,9 @@ var jq = function $(selector){
       peer.elem.remove();
     }
   });
-
+  webrtc.on('PeerDataMessage', function(){
+    console.log(arguments);
+  });
   webrtc.start(function(err, stream){
     client.emit('join', {room:1234});
   });
