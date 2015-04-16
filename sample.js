@@ -11,10 +11,12 @@ var jq = function $(selector){
       debug:false
     }
   });
+
   var rtc = webrtc.RTC();
   webrtc.jq = jq;
+
   client.on('new-peer', webrtc.newPeer.bind(rtc));
-  
+
   client.on('signal', function(data){
     rtc.handlers.sig(data);
   });
@@ -37,6 +39,7 @@ var jq = function $(selector){
     attachMediaStream(elem, stream);
     return elem;
   }
+
   webrtc.on('LocalStreamAdded', function(stream){
     var elem = create(stream);
     elem.id = "local";
@@ -46,7 +49,7 @@ var jq = function $(selector){
   webrtc.on('LocalStreamStopped', function(){
     myInfo.elem.hidden = true;
   });
-  
+
   webrtc.on('PeerStreamAdded', function(peer){
     var id = peer.id;
     peer.elem = create(peer.stream);
@@ -58,9 +61,11 @@ var jq = function $(selector){
       peer.elem.remove();
     }
   });
+
   webrtc.on('PeerDataMessage', function(){
     console.log(arguments);
   });
+  
   webrtc.start(function(err, stream){
     client.emit('join', {room:1234});
   });
