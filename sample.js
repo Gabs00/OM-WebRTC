@@ -1,5 +1,5 @@
 var WebRTC = require('./wrtc');
-var client = io.connect('localhost');
+var client = io();
 var jq = function $(selector){
   return document.querySelectorAll(selector);
 };
@@ -8,15 +8,25 @@ var jq = function $(selector){
 
   var webrtc = WebRTC({
     webrtcConfig: {
-      debug:false
+      debug:true
     }
   });
 
   var rtc = webrtc.RTC();
   webrtc.jq = jq;
 
+  console.log(client);
+
+  //Log when socket.io client is connected to server
+  client.on('connect', function(){
+    console.log('Connected to socket.io on server');
+  });
+
+  //Server sends the new-peer event when another user connects
   client.on('new-peer', webrtc.newPeer.bind(rtc));
 
+  //The signal event here represents the webrtc communications that occur
+  //In order to connect (handshake)
   client.on('signal', function(data){
     rtc.handlers.sig(data);
   });
@@ -32,6 +42,9 @@ var jq = function $(selector){
   });
 
   var myInfo = webrtc.getMyInfo();
+
+  // Creates the dom video elements and appends them to the
+  // dom, here we just append them directly onto the body
   function create(stream){
     var elem = document.createElement('video');
     elem.autoplay = true;
@@ -39,6 +52,8 @@ var jq = function $(selector){
     attachMediaStream(elem, stream);
     return elem;
   }
+
+  /* These events control the video display */
 
   webrtc.on('LocalStreamAdded', function(stream){
     var elem = create(stream);
@@ -65,9 +80,10 @@ var jq = function $(selector){
   webrtc.on('PeerDataMessage', function(){
     console.log(arguments);
   });
-  
+
+  //Connecting to a socket.io room 
   webrtc.start(function(err, stream){
-    client.emit('join', {room:1234});
+    client.emit('join', { room:1234 });
   });
 
 module.exports = webrtc;
